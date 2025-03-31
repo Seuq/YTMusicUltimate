@@ -1,0 +1,80 @@
+async function runTestAutomation() {
+
+    let panicMode = false;  // Flag to stop execution
+
+    // Fetch questions
+    let response = await fetch("https://raw.githubusercontent.com/Seuq/YTMusicUltimate/refs/heads/main/fso");
+    let allQuestions = await response.json();
+
+    function normalizeText(text) {
+        return text.trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function getCurrentQuestionElement() {
+        return [...document.querySelectorAll("label[id^='qText_']")]
+            .find(label => label.offsetParent !== null);
+    }
+
+    function getCurrentQuestionText() {
+        let questionElement = getCurrentQuestionElement();
+        return questionElement ? normalizeText(questionElement.innerText) : null;
+    }
+
+    function getPageAnswers() {
+        return [...document.querySelectorAll("label[id^='lbl_qChoice_']")].map(label => ({
+            text: normalizeText(label.innerText),
+            input: document.getElementById(label.getAttribute("for"))
+        }));
+    }
+
+    function findAnswer(questionText) {
+        return allQuestions.find(q => normalizeText(q.question) === questionText);
+    }
+
+    async function handleNewQuestion() {
+        if (panicMode) return; // Stop execution if panic mode is activated
+
+        let currentQuestionText = getCurrentQuestionText();
+        if (!currentQuestionText) return;
+
+        let foundQuestion = findAnswer(currentQuestionText);
+        if (!foundQuestion) return;
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        let pageAnswers = getPageAnswers();
+        foundQuestion.answers.forEach(answerText => {
+            let matchedAnswer = pageAnswers.find(a => a.text === normalizeText(answerText));
+            if (matchedAnswer && matchedAnswer.input) {
+                matchedAnswer.input.checked = true;
+            }
+        });
+    }
+
+    let lastQuestionText = null;
+    let observer = new MutationObserver(() => {
+        if (panicMode) return; // Stop observer if panic mode is activated
+
+        let newQuestionText = getCurrentQuestionText();
+        if (newQuestionText && newQuestionText !== lastQuestionText) {
+            lastQuestionText = newQuestionText;
+            handleNewQuestion();
+        }
+    });
+
+    let questionContainer = document.body;
+    observer.observe(questionContainer, { childList: true, subtree: true });
+
+    // PANIC BUTTON: Press `F12` to stop the script
+    document.addEventListener("keydown", function (event) {
+        if (event.key === ".") {  // Change key if needed
+            panicMode = true;
+            observer.disconnect(); // Stop observing new questions
+            allQuestions = []; // Clear questions (optional)
+            console.log("Panic mode activated! Script stopped.");
+        }
+    });
+
+}
+
+runTestAutomation();
